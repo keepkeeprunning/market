@@ -1,3 +1,4 @@
 secret.py
 Pipfile
 *.sqlite3
+*.log

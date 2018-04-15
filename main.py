@@ -7,9 +7,11 @@ logging.basicConfig(filename="bot.log",level=logging.ERROR)
 def reply_with_text(chat_id,text):
   data = {'chat_id': chat_id, 'text': text}
   try:
-    post = requests.post('{0}/sendMessage'.format(tg_default_url), data = data)
+    post = requests.post('{0}/sendMessage'.format(tg_base_url), data = data)
+    return True
   except requests.exceptions.RequestException:
     logging.error('Could not connect to Telegram API.')
+    return False
 
 def get_bitstamp(pair_str):
   base_url = 'https://www.bitstamp.net/api/v2/ticker'
@@ -23,7 +25,7 @@ def get_bitstamp(pair_str):
 def respond_to_command(chat_id,command):
   if '/start' in command:
     logging.debug('Received /start command. Replying.')
-    reply_with_text(chat_id, response_messages['hello'])
+    return reply_with_text(chat_id, response_messages['hello'])
   elif '/btc' in command:
     logging.debug('Received /btc command. Replying.')
     course = get_bitstamp('btcusd')
@@ -31,7 +33,7 @@ def respond_to_command(chat_id,command):
       course_str = 'Bitcoin bid: $' + str(course['bid']) + '; ask: $' + str(course['ask'])
     else:
       course_str = response_messages['stock_market_error']
-    reply_with_text(chat_id, course_str)
+    return reply_with_text(chat_id, course_str)
   elif '/eth' in command:
     logging.debug('Received /btc command. Replying.')
     course = get_bitstamp('ethusd')
@@ -39,14 +41,14 @@ def respond_to_command(chat_id,command):
       course_str = 'Ethereum bid: $' + str(course['bid']) + '; ask: $' + str(course['ask'])
     else:
       course_str = response_messages['stock_market_error']
-    reply_with_text(chat_id, course_str)
+    return reply_with_text(chat_id, course_str)
   else:
-    reply_with_text(chat_id,  response_messages['wrong_command'])
+    return reply_with_text(chat_id,  response_messages['wrong_command'])
 
 response_messages = {
-  hello: 'Hi and hello! To check coin prices in: /btc, /eth',
-  stock_market_error: 'Could not connect to stock market. Try again later.',
-  wrong_command : 'I don\'t uderstand you, sir. Commands: /start, /btc, /eth'
+  'hello' : 'Hi and hello! To check coin prices in: /btc, /eth',
+  'stock_market_error' : 'Could not connect to stock market. Try again later.',
+  'wrong_command' : 'I don\'t uderstand you, sir. Commands: /start, /btc, /eth'
 }
 
 logging.debug('Starting bot. Listening for messages...')
@@ -67,7 +69,7 @@ while True:
     logging.error('Could not connect to API Telegram.')
   except ValueError:
     logging.error('Could not parse API Telegram response.')
-    
+
   if not updates['ok']:
     logging.debug('Telegram API returned response that we did not expect.')
     continue
@@ -83,7 +85,7 @@ while True:
     command = update['message']['text']
     chat_id =  update['message']['chat']['id']
 
-    respond_to_command(chat_id,command)
-    last_update = update['update_id']
+    if respond_to_command(chat_id,command):
+      last_update = update['update_id']
 
 #TODO: handle Ctrl+Z
