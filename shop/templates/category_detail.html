@@ -1,0 +1,6 @@
+<h1>{{category.title}}</h1>
+<ul>
+{% for product in category.products.all %}
+    <li><a href="product/{{product.id}}">{{product.title}}</a></li>
+{% endfor %}
+</ul>
