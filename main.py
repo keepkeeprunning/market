@@ -1,86 +1,89 @@
 import requests, time
 from secret import BOT_TOKEN
+import logging
 
-#app loop
-#read updates
-#loop through updates
-#parse query
-#send response
-#update last_update
-#sleep
+logging.basicConfig(filename="bot.log",level=logging.ERROR)
 
 def reply_with_text(chat_id,text):
-  if not isinstance(text, str):
-    print('reply_with_text: Error. Passed variable is not string')
-    return
+  data = {'chat_id': chat_id, 'text': text}
   try:
-    post = requests.post(default_url + '/sendMessage' \
-                            , data = {'chat_id': chat_id, 'text': text})
+    post = requests.post('{0}/sendMessage'.format(tg_default_url), data = data)
   except requests.exceptions.RequestException:
-    print('reply_with_text: Error. Could not connect to Telegram API.')
+    logging.error('Could not connect to Telegram API.')
 
 def get_bitstamp(pair_str):
-  base_url = 'https://www.bitstamp.net/api/v2/ticker/'
+  base_url = 'https://www.bitstamp.net/api/v2/ticker'
   try:
-    res = requests.get(base_url + pair_str + '/')
-    return res.json()
+    response = requests.get('{0}/{1}/'.format(base_url,pair_str))
+    return response.json()
   except requests.exceptions.RequestException:
-    print('exception while connecting to Bitstamp')
+    logging.error('Could not connect to Bitstamp API.')
     return
 
-print('Starting bot. Listening for messages...')
+def respond_to_command(chat_id,command):
+  if '/start' in command:
+    logging.debug('Received /start command. Replying.')
+    reply_with_text(chat_id, response_messages['hello'])
+  elif '/btc' in command:
+    logging.debug('Received /btc command. Replying.')
+    course = get_bitstamp('btcusd')
+    if course:
+      course_str = 'Bitcoin bid: $' + str(course['bid']) + '; ask: $' + str(course['ask'])
+    else:
+      course_str = response_messages['stock_market_error']
+    reply_with_text(chat_id, course_str)
+  elif '/eth' in command:
+    logging.debug('Received /btc command. Replying.')
+    course = get_bitstamp('ethusd')
+    if course:
+      course_str = 'Ethereum bid: $' + str(course['bid']) + '; ask: $' + str(course['ask'])
+    else:
+      course_str = response_messages['stock_market_error']
+    reply_with_text(chat_id, course_str)
+  else:
+    reply_with_text(chat_id,  response_messages['wrong_command'])
+
+response_messages = {
+  hello: 'Hi and hello! To check coin prices in: /btc, /eth',
+  stock_market_error: 'Could not connect to stock market. Try again later.',
+  wrong_command : 'I don\'t uderstand you, sir. Commands: /start, /btc, /eth'
+}
+
+logging.debug('Starting bot. Listening for messages...')
 
 last_update = 0
-default_url = 'https://api.telegram.org/bot' + BOT_TOKEN
+tg_base_url = 'https://api.telegram.org/bot' + BOT_TOKEN
+
 while True:
   time.sleep(3) #every time we say 'continue', we get here
+  #get updates from Telegram
   try:
-    resp = requests.get(default_url +'/getUpdates?offset=' + str(last_update+1))
-    if resp.status_code != 200:
-      print('main_loop: Error. API Telegram returned HTTP status code: ' + str(resp.status_code))
+    response = requests.get('{0}/getUpdates?offset='.format(tg_base_url) + str(last_update+1))
+    if response.status_code != 200:
+      logging.error('API Telegram returned HTTP status code: ' + str(response.status_code))
       continue
-    updates = resp.json()
+    updates = response.json()
   except requests.exceptions.RequestException:
-    print('main_loop: Error. Could not connect to API Telegram.')
+    logging.error('Could not connect to API Telegram.')
   except ValueError:
-    print('main_loop: Error. Could not parse API Telegram response.')
-
+    logging.error('Could not parse API Telegram response.')
+    
   if not updates['ok']:
-    print('main_loop: Telegram API returned response that we did not expect.')
+    logging.debug('Telegram API returned response that we did not expect.')
     continue
   if not updates['result']: #no updates
     continue
-
+  #process incoming updates  
   for update in updates['result']:
-    print('[update '+str(update['update_id'])+']')
-    if not ('message' in update):
-      print('Not a message type came in update. Dont know how to handle. Skipping.')
+    logging.debug('[update '+str(update['update_id'])+']')
+    if not 'message' in update:
+      logging.debug('Not a message type came in update. Dont know how to handle. Skipping.')
       continue
-    #parse request
-    message = update['message']['text']
+    #request from user
+    command = update['message']['text']
     chat_id =  update['message']['chat']['id']
-    #send response
-    if '/start' in message:
-      print('Received /start command. Replying.')
-      reply_with_text(chat_id, 'Hi and hello! To check coin prices in: /btc, /eth')
-    elif '/btc' in message:
-      print('Received /btc command. Replying.')
-      course = get_bitstamp('btcusd')
-      if course:
-        course_str = 'Bitcoin bid: $' + str(course['bid']) + '; ask: $' + str(course['ask'])
-      else:
-        course_str = 'Could not connect to stock market. Try again later.'
-      reply_with_text(chat_id, course_str)
-    elif '/eth' in message:
-      print('Received /btc command. Replying.')
-      course = get_bitstamp('ethusd')
-      if course:
-        course_str = 'Ethereum bid: $' + str(course['bid']) + '; ask: $' + str(course['ask'])
-      else:
-        course_str = 'Could not connect to stock market. Try again later.'
-      reply_with_text(chat_id, course_str)
-    else:
-      reply_with_text(chat_id, 'I don\'t uderstand you, sir. Commands: /start, /btc, /eth' )
+
+    respond_to_command(chat_id,command)
     last_update = update['update_id']
 
 #TODO: handle Ctrl+Z
